@@ -1,0 +1,58 @@
+@page "/departments"
+@inject HttpClient Http
+
+<PageTitle>Departamentos</PageTitle>
+
+<h1>Departamentos</h1>
+
+<p>Lista de departamentos carregados da API.</p>
+
+@if (departments == null)
+{
+    <p><em>Carregando...</em></p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Id</th>
+                <th>Código (Code)</th>
+                <th>Descrição</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var dept in departments)
+            {
+                <tr>
+                    <td>@dept.Id</td>
+                    <td>@dept.Code</td>
+                    <td>@dept.Description</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private Department[]? departments;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            departments = await Http.GetFromJsonAsync<Department[]>("api/config/departments");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao buscar departamentos: {ex.Message}");
+        }
+    }
+
+    public class Department
+    {
+        public int Id { get; set; }
+        public string Code { get; set; }
+        public string Description { get; set; }
+    }
+}

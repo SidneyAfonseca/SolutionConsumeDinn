@@ -1,0 +1,58 @@
+@page "/accountplans"
+@inject HttpClient Http
+
+<PageTitle>Plano de Contas</PageTitle>
+
+<h1>Plano de Contas</h1>
+
+<p>Lista de planos de contas carregados da API.</p>
+
+@if (plans == null)
+{
+    <p><em>Carregando...</em></p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Id</th>
+                <th>Código (Code)</th>
+                <th>Descrição</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var plan in plans)
+            {
+                <tr>
+                    <td>@plan.Id</td>
+                    <td>@plan.Code</td>
+                    <td>@plan.Description</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private AccountPlan[]? plans;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            plans = await Http.GetFromJsonAsync<AccountPlan[]>("api/config/accountplans");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao buscar planos de contas: {ex.Message}");
+        }
+    }
+
+    public class AccountPlan
+    {
+        public int Id { get; set; }
+        public string Code { get; set; }
+        public string Description { get; set; }
+    }
+}
