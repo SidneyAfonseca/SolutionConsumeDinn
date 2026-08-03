@@ -31,9 +31,18 @@ public class DInService : IDInService
         if (data == null || !data.Any())
             throw new Exception("Payload vazio");
 
-        var total = data.Sum(x => x.BalanceValue);
+        // Regra 15 do guia: somam-se apenas as contas de referencial D-IN, que
+        // iniciam de 1 a 8 (Ativo, Passivo e DRE). As contas gerenciais (9xxx)
+        // ficam fora dessa conferência.
+        var total = data
+            .Where(x => x.DfsPk != null && !string.IsNullOrEmpty(x.DfsPk.CodeDFSPlan)
+                        && x.DfsPk.CodeDFSPlan[0] >= '1' && x.DfsPk.CodeDFSPlan[0] <= '8')
+            .Sum(x => x.BalanceValue);
+
         if (total != 0)
-            throw new Exception("A soma das contas de Ativo, Passivo e DRE devem ser igual a zero.");
+            throw new Exception(
+                "A soma das contas de Ativo, Passivo e DRE devem ser igual a zero. " +
+                $"(Saldo atual: {total:N2})");
 
         foreach (var item in data)
         {
@@ -46,6 +55,11 @@ public class DInService : IDInService
             if (string.IsNullOrWhiteSpace(item.DfsPk.PeriodYear)) throw new Exception("O campo periodYear não pode ser nulo");
             if (item.DfsPk.PeriodYear.Length != 4) throw new Exception("O campo periodYear precisa ter 4 dígitos");
             if (string.IsNullOrWhiteSpace(item.DfsPk.SectionCode)) throw new Exception("O campo sectionCode não pode ser nulo");
+
+            // O exemplo JSON do guia usa "06", mas a API da AGCO recusa mês com
+            // zero à esquerda ("periodMonth precisa estar entre 1 a 12.
+            // Encontrado: 06"), então o mês vai sem preenchimento.
+            item.DfsPk.PeriodMonth = month.ToString();
         }
 
         var payload = JsonSerializer.Serialize(data);

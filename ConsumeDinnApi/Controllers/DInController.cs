@@ -12,10 +12,12 @@ namespace ConsumeDinnApi.Controllers;
 public class DInController : ControllerBase
 {
     private readonly IDInService _service;
+    private readonly IBalanceteService _balanceteService;
 
-    public DInController(IDInService service)
+    public DInController(IDInService service, IBalanceteService balanceteService)
     {
         _service = service;
+        _balanceteService = balanceteService;
     }
 
     private int UsuarioLogadoId =>
@@ -30,6 +32,35 @@ public class DInController : ControllerBase
     {
         var result = await _service.EnviarAsync(request, UsuarioLogadoId, UsuarioLogadoNome);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Aplica o De/Para no balancete e devolve o payload e os problemas
+    /// encontrados, sem enviar nada para a AGCO.
+    /// </summary>
+    [HttpPost("balancete/validar")]
+    public async Task<IActionResult> ValidarBalancete([FromBody] BalanceteRequest request)
+    {
+        var preview = await _balanceteService.ValidarAsync(request);
+        return Ok(preview);
+    }
+
+    /// <summary>
+    /// Valida e envia o balancete ao D-IN, registrando o envio com o usuário
+    /// logado. O envio só ocorre se todas as validações do guia passarem.
+    /// </summary>
+    [HttpPost("balancete/enviar")]
+    public async Task<IActionResult> EnviarBalancete([FromBody] BalanceteRequest request)
+    {
+        var resultado = await _balanceteService.EnviarAsync(request, UsuarioLogadoId, UsuarioLogadoNome);
+
+        if (!resultado.Preview.Valido)
+            return BadRequest(resultado);
+
+        if (!resultado.Enviado)
+            return StatusCode(StatusCodes.Status502BadGateway, resultado);
+
+        return Ok(resultado);
     }
 
     /// <summary>

@@ -34,6 +34,7 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddHttpClient<DIn.Repository.IDInRepository, DIn.Repository.DInRepository>();
 builder.Services.AddScoped<DIn.Service.IDInService, DIn.Service.DInService>();
+builder.Services.AddScoped<DIn.Service.IBalanceteService, DIn.Service.BalanceteService>();
 builder.Services.AddScoped<DIn.Service.ITokenService, DIn.Service.TokenService>();
 
 var jwtKey = builder.Configuration["Jwt:Key"];

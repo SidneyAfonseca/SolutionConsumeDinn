@@ -1,0 +1,344 @@
+@page "/empresa"
+@attribute [Authorize(Roles = "Admin")]
+@inject DinnApiClient Api
+
+<PageTitle>Empresa</PageTitle>
+
+<h1>Cadastro da Empresa</h1>
+
+<p>
+    O CNPJ da matriz é enviado como <code>dealerHeadOfficeCode</code> e deve ser o cadastrado
+    junto à AGCO (CNPJ do contrato de concessão). Todas as filiais ativas são obrigatórias em
+    cada envio — o guia proíbe o envio individual.
+</p>
+
+@if (!string.IsNullOrEmpty(erro))
+{
+    <div class="alert alert-danger" role="alert">@erro</div>
+}
+@if (!string.IsNullOrEmpty(aviso))
+{
+    <div class="alert alert-success" role="alert">@aviso</div>
+}
+
+<div class="card mb-4">
+    <div class="card-header">@(empresaEmEdicao == null ? "Nova empresa" : $"Editando: {empresaEmEdicao.CorporateName}")</div>
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label" for="razao">Razão social</label>
+                <input id="razao" class="form-control" @bind="form.CorporateName" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="cnpjMatriz">CNPJ da matriz</label>
+                <input id="cnpjMatriz" class="form-control" placeholder="12.345.678/0001-90" @bind="form.HeadOfficeCnpj" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="deptPadrao">Departamento padrão</label>
+                <select id="deptPadrao" class="form-select" @bind="form.DefaultDepartmentCode">
+                    <option value="">(nenhum)</option>
+                    @foreach (var d in departamentos)
+                    {
+                        <option value="@d.Code">@d.Code — @d.Description</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100" @onclick="SalvarEmpresa" disabled="@salvando">
+                    @(empresaEmEdicao == null ? "Cadastrar" : "Salvar")
+                </button>
+                @if (empresaEmEdicao != null)
+                {
+                    <button class="btn btn-link w-100 mt-1" @onclick="CancelarEdicao">Cancelar</button>
+                }
+            </div>
+        </div>
+        <small class="text-muted">
+            O departamento padrão é usado nas linhas do balancete que vierem sem centro de custo,
+            já que o D-IN exige <code>sectionCode</code> em todo item.
+        </small>
+    </div>
+</div>
+
+@if (empresas == null)
+{
+    <p><em>Carregando...</em></p>
+}
+else if (empresas.Count == 0)
+{
+    <p>Nenhuma empresa cadastrada.</p>
+}
+else
+{
+    @foreach (var e in empresas)
+    {
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>@e.CorporateName</strong>
+                    <span class="text-muted ms-2">matriz @e.HeadOfficeCnpj</span>
+                    @if (e.IsActive)
+                    {
+                        <span class="badge bg-success ms-2">Ativa</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-danger ms-2">Inativa</span>
+                    }
+                    <span class="badge bg-secondary ms-2">@e.TotalContasDePara contas De/Para</span>
+                    <span class="badge bg-secondary">@e.TotalDepartamentosDePara centros de custo</span>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => Editar(e)">Editar</button>
+            </div>
+            <div class="card-body">
+                <div class="row g-2 align-items-end mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label">CNPJ da filial</label>
+                        <input class="form-control form-control-sm" placeholder="12.345.678/0002-70"
+                               value="@NovaFilialCnpj(e.Id)"
+                               @onchange="ev => SetNovaFilialCnpj(e.Id, ev.Value?.ToString())" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Nome</label>
+                        <input class="form-control form-control-sm"
+                               value="@NovaFilialNome(e.Id)"
+                               @onchange="ev => SetNovaFilialNome(e.Id, ev.Value?.ToString())" />
+                    </div>
+                    <div class="col-md-3 form-check ms-2">
+                        <input class="form-check-input" type="checkbox" id="@($"matriz{e.Id}")"
+                               checked="@NovaFilialMatriz(e.Id)"
+                               @onchange="ev => SetNovaFilialMatriz(e.Id, (bool?)ev.Value == true)" />
+                        <label class="form-check-label" for="@($"matriz{e.Id}")">É a matriz</label>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-sm btn-primary w-100" @onclick="() => AdicionarFilial(e)" disabled="@salvando">
+                            Adicionar filial
+                        </button>
+                    </div>
+                </div>
+
+                @if (e.Branches.Count == 0)
+                {
+                    <p class="text-muted mb-0">
+                        Sem filiais cadastradas — o envio usará apenas a matriz, com HeadOffice = BranchCode.
+                    </p>
+                }
+                else
+                {
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>CNPJ</th>
+                                <th>Nome</th>
+                                <th>Matriz</th>
+                                <th>Situação</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var b in e.Branches)
+                            {
+                                <tr>
+                                    <td>@b.Cnpj</td>
+                                    <td>@b.Name</td>
+                                    <td>@(b.IsHeadOffice ? "Sim" : "-")</td>
+                                    <td>
+                                        @if (b.IsActive)
+                                        {
+                                            <span class="badge bg-success">Ativa</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">Inativa</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (b.IsActive)
+                                        {
+                                            <button class="btn btn-sm btn-outline-secondary me-1"
+                                                    @onclick="() => AlterarStatusFilial(b, false)" disabled="@salvando">
+                                                Inativar
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button class="btn btn-sm btn-outline-success me-1"
+                                                    @onclick="() => AlterarStatusFilial(b, true)" disabled="@salvando">
+                                                Ativar
+                                            </button>
+                                        }
+                                        <button class="btn btn-sm btn-outline-danger"
+                                                @onclick="() => RemoverFilial(b)" disabled="@salvando">
+                                            Remover
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private List<DealerDto>? empresas;
+    private List<CodeDescriptionDto> departamentos = new();
+    private SaveDealerRequest form = new();
+    private DealerDto? empresaEmEdicao;
+    private readonly Dictionary<int, SaveBranchRequest> novasFiliais = new();
+    private string? erro;
+    private string? aviso;
+    private bool salvando;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            departamentos = await Api.GetDepartamentosAsync();
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+
+        await Carregar();
+    }
+
+    private async Task Carregar()
+    {
+        try
+        {
+            empresas = await Api.GetEmpresasAsync();
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+    }
+
+    private SaveBranchRequest Nova(int dealerId)
+    {
+        if (!novasFiliais.TryGetValue(dealerId, out var req))
+        {
+            req = new SaveBranchRequest();
+            novasFiliais[dealerId] = req;
+        }
+        return req;
+    }
+
+    private string? NovaFilialCnpj(int id) => Nova(id).Cnpj;
+    private string? NovaFilialNome(int id) => Nova(id).Name;
+    private bool NovaFilialMatriz(int id) => Nova(id).IsHeadOffice;
+    private void SetNovaFilialCnpj(int id, string? v) => Nova(id).Cnpj = v ?? string.Empty;
+    private void SetNovaFilialNome(int id, string? v) => Nova(id).Name = v;
+    private void SetNovaFilialMatriz(int id, bool v) => Nova(id).IsHeadOffice = v;
+
+    private void Editar(DealerDto e)
+    {
+        empresaEmEdicao = e;
+        form = new SaveDealerRequest
+        {
+            CorporateName = e.CorporateName,
+            HeadOfficeCnpj = e.HeadOfficeCnpj,
+            DefaultDepartmentCode = e.DefaultDepartmentCode,
+            IsActive = e.IsActive
+        };
+        erro = null;
+        aviso = null;
+    }
+
+    private void CancelarEdicao()
+    {
+        empresaEmEdicao = null;
+        form = new SaveDealerRequest();
+    }
+
+    private async Task SalvarEmpresa()
+    {
+        if (string.IsNullOrWhiteSpace(form.CorporateName) || string.IsNullOrWhiteSpace(form.HeadOfficeCnpj))
+        {
+            erro = "Informe a razão social e o CNPJ da matriz.";
+            return;
+        }
+
+        await Executar(async () =>
+        {
+            if (empresaEmEdicao == null)
+            {
+                await Api.CriarEmpresaAsync(form);
+                aviso = "Empresa cadastrada.";
+            }
+            else
+            {
+                await Api.AtualizarEmpresaAsync(empresaEmEdicao.Id, form);
+                aviso = "Empresa atualizada.";
+            }
+
+            empresaEmEdicao = null;
+            form = new SaveDealerRequest();
+        });
+    }
+
+    private async Task AdicionarFilial(DealerDto e)
+    {
+        var req = Nova(e.Id);
+
+        if (string.IsNullOrWhiteSpace(req.Cnpj))
+        {
+            erro = "Informe o CNPJ da filial.";
+            return;
+        }
+
+        await Executar(async () =>
+        {
+            await Api.CriarFilialAsync(e.Id, req);
+            aviso = $"Filial {req.Cnpj} adicionada.";
+            novasFiliais[e.Id] = new SaveBranchRequest();
+        });
+    }
+
+    private async Task AlterarStatusFilial(DealerBranchDto b, bool ativa)
+    {
+        await Executar(async () =>
+        {
+            await Api.AlterarStatusFilialAsync(b.Id, ativa);
+            aviso = ativa ? $"Filial {b.Cnpj} ativada." : $"Filial {b.Cnpj} inativada.";
+        });
+    }
+
+    private async Task RemoverFilial(DealerBranchDto b)
+    {
+        await Executar(async () =>
+        {
+            await Api.RemoverFilialAsync(b.Id);
+            aviso = $"Filial {b.Cnpj} removida.";
+        });
+    }
+
+    private async Task Executar(Func<Task> acao)
+    {
+        salvando = true;
+        erro = null;
+        aviso = null;
+
+        try
+        {
+            await acao();
+        }
+        catch (ApiException ex)
+        {
+            erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            erro = $"Falha ao chamar a API: {ex.Message}";
+        }
+        finally
+        {
+            salvando = false;
+            await Carregar();
+        }
+    }
+}

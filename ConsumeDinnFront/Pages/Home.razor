@@ -8,12 +8,18 @@
     <Authorized>
         <p>Olá, @context.User.Identity?.Name.</p>
         <ul>
+            <li><a href="envio">Enviar Balancete</a> — aplica o De/Para, valida as regras do guia e envia ao D-IN.</li>
             <li><a href="envios">Envios D-IN</a> — histórico dos envios e quem os disparou.</li>
             <li><a href="departments">Departamentos</a> e <a href="accountplans">Plano de Contas</a> — dados do guia D-IN v4.1.</li>
         </ul>
         <AuthorizeView Roles="Admin" Context="admin">
             <Authorized>
-                <p><a href="users">Administração de Usuários</a> — criar usuários, trocar perfis e desabilitar acessos.</p>
+                <p>Administração:</p>
+                <ul>
+                    <li><a href="empresa">Empresa</a> — matriz, filiais e departamento padrão.</li>
+                    <li><a href="depara">De/Para</a> — contas e centros de custo da origem para o D-IN.</li>
+                    <li><a href="users">Usuários</a> — criar usuários, trocar perfis e desabilitar acessos.</li>
+                </ul>
             </Authorized>
         </AuthorizeView>
     </Authorized>

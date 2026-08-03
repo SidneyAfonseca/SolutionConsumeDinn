@@ -13,6 +13,10 @@ public class AppDbContext : DbContext
     public DbSet<DInReturn> DInReturns { get; set; }
     public DbSet<Department> Departments { get; set; }
     public DbSet<AccountPlan> AccountPlans { get; set; }
+    public DbSet<Dealer> Dealers { get; set; }
+    public DbSet<DealerBranch> DealerBranches { get; set; }
+    public DbSet<AccountMapping> AccountMappings { get; set; }
+    public DbSet<DepartmentMapping> DepartmentMappings { get; set; }
 
     /// <summary>
     /// Hash PBKDF2 da senha inicial do administrador ("admin123"). Salt fixo
@@ -37,6 +41,37 @@ public class AppDbContext : DbContext
         {
             entity.HasIndex(u => u.Username).IsUnique();
             entity.Property(u => u.Role).HasConversion<int>();
+        });
+
+        modelBuilder.Entity<Dealer>(entity =>
+        {
+            entity.HasIndex(d => d.HeadOfficeCnpj).IsUnique();
+            entity.HasMany(d => d.Branches)
+                  .WithOne(b => b.Dealer!)
+                  .HasForeignKey(b => b.DealerId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Uma conta (ou centro de custo) de origem tem um único destino por empresa.
+        modelBuilder.Entity<DealerBranch>()
+            .HasIndex(b => new { b.DealerId, b.Cnpj }).IsUnique();
+
+        modelBuilder.Entity<AccountMapping>(entity =>
+        {
+            entity.HasIndex(m => new { m.DealerId, m.SourceCode }).IsUnique();
+            entity.HasOne(m => m.Dealer)
+                  .WithMany()
+                  .HasForeignKey(m => m.DealerId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DepartmentMapping>(entity =>
+        {
+            entity.HasIndex(m => new { m.DealerId, m.SourceCode }).IsUnique();
+            entity.HasOne(m => m.Dealer)
+                  .WithMany()
+                  .HasForeignKey(m => m.DealerId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         // O envio guarda o usuário que o disparou; ao remover um usuário o

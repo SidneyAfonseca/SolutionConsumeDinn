@@ -22,6 +22,42 @@ namespace ConsumeDinnApi.Migrations
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
 
+            modelBuilder.Entity("DIn.Domain.AccountMapping", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AccountPlanCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<int>("DealerId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("SourceCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("SourceDescription")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DealerId", "SourceCode")
+                        .IsUnique();
+
+                    b.ToTable("AccountMappings");
+                });
+
             modelBuilder.Entity("DIn.Domain.AccountPlan", b =>
                 {
                     b.Property<int>("Id")
@@ -1787,6 +1823,76 @@ namespace ConsumeDinnApi.Migrations
                     b.ToTable("DInReturns");
                 });
 
+            modelBuilder.Entity("DIn.Domain.Dealer", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CorporateName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("DefaultDepartmentCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("HeadOfficeCnpj")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("tinyint(1)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HeadOfficeCnpj")
+                        .IsUnique();
+
+                    b.ToTable("Dealers");
+                });
+
+            modelBuilder.Entity("DIn.Domain.DealerBranch", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Cnpj")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<int>("DealerId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("IsHeadOffice")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DealerId", "Cnpj")
+                        .IsUnique();
+
+                    b.ToTable("DealerBranches");
+                });
+
             modelBuilder.Entity("DIn.Domain.Department", b =>
                 {
                     b.Property<int>("Id")
@@ -1848,6 +1954,42 @@ namespace ConsumeDinnApi.Migrations
                         });
                 });
 
+            modelBuilder.Entity("DIn.Domain.DepartmentMapping", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("DealerId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DepartmentCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("SourceCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("SourceDescription")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DealerId", "SourceCode")
+                        .IsUnique();
+
+                    b.ToTable("DepartmentMappings");
+                });
+
             modelBuilder.Entity("DIn.Domain.UserLogin", b =>
                 {
                     b.Property<int>("Id")
@@ -1902,6 +2044,17 @@ namespace ConsumeDinnApi.Migrations
                         });
                 });
 
+            modelBuilder.Entity("DIn.Domain.AccountMapping", b =>
+                {
+                    b.HasOne("DIn.Domain.Dealer", "Dealer")
+                        .WithMany()
+                        .HasForeignKey("DealerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Dealer");
+                });
+
             modelBuilder.Entity("DIn.Domain.DInReturn", b =>
                 {
                     b.HasOne("DIn.Domain.UserLogin", "User")
@@ -1910,6 +2063,33 @@ namespace ConsumeDinnApi.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("DIn.Domain.DealerBranch", b =>
+                {
+                    b.HasOne("DIn.Domain.Dealer", "Dealer")
+                        .WithMany("Branches")
+                        .HasForeignKey("DealerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Dealer");
+                });
+
+            modelBuilder.Entity("DIn.Domain.DepartmentMapping", b =>
+                {
+                    b.HasOne("DIn.Domain.Dealer", "Dealer")
+                        .WithMany()
+                        .HasForeignKey("DealerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Dealer");
+                });
+
+            modelBuilder.Entity("DIn.Domain.Dealer", b =>
+                {
+                    b.Navigation("Branches");
                 });
 #pragma warning restore 612, 618
         }

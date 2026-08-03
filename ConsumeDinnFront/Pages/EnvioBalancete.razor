@@ -1,0 +1,454 @@
+@page "/envio"
+@attribute [Authorize]
+@inject DinnApiClient Api
+
+<PageTitle>Envio do Balancete</PageTitle>
+
+<h1>Envio do Balancete</h1>
+
+<p>
+    Cole o balancete extraído do sistema contábil (ou selecione um arquivo CSV/TXT). O sistema
+    aplica o De/Para, agrupa por chave (conta + filial + período + departamento), confere as
+    regras do guia e só então envia para a AGCO.
+</p>
+
+@if (!string.IsNullOrEmpty(erro))
+{
+    <div class="alert alert-danger" role="alert">@erro</div>
+}
+@if (!string.IsNullOrEmpty(aviso))
+{
+    <div class="alert alert-success" role="alert">@aviso</div>
+}
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end mb-3">
+            <div class="col-md-5">
+                <label class="form-label" for="empresa">Empresa</label>
+                <select id="empresa" class="form-select" @bind="empresaId">
+                    <option value="0">(selecione)</option>
+                    @foreach (var e in empresas)
+                    {
+                        <option value="@e.Id">@e.CorporateName — @e.HeadOfficeCnpj</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" for="mes">Mês</label>
+                <select id="mes" class="form-select" @bind="periodMonth">
+                    @for (var m = 1; m <= 12; m++)
+                    {
+                        var v = m.ToString("00");
+                        <option value="@v">@v</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" for="ano">Ano</label>
+                <input id="ano" class="form-control" maxlength="4" @bind="periodYear" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="arquivo">Arquivo (CSV/TXT)</label>
+                <InputFile id="arquivo" class="form-control" OnChange="CarregarArquivo" />
+            </div>
+        </div>
+
+        <label class="form-label" for="conteudo">
+            Linhas do balancete — <code>CNPJ da filial; conta de origem; centro de custo; saldo</code>
+        </label>
+        <textarea id="conteudo" class="form-control font-monospace" rows="10" @bind="conteudo"
+                  placeholder="@PlaceholderExemplo"></textarea>
+        <small class="text-muted">
+            Aceita <code>;</code>, <code>,</code> ou tabulação como separador. A primeira linha pode ser
+            cabeçalho. Saldo aceita vírgula ou ponto como decimal. CNPJ em branco assume a matriz;
+            centro de custo em branco usa o departamento padrão da empresa.
+        </small>
+
+        <div class="mt-3 d-flex gap-2">
+            <button class="btn btn-outline-primary" @onclick="Validar" disabled="@processando">
+                @(processando ? "Processando..." : "Validar")
+            </button>
+            <button class="btn btn-primary" @onclick="Enviar"
+                    disabled="@(processando || preview == null || !preview.Valido)">
+                Enviar ao D-IN
+            </button>
+        </div>
+    </div>
+</div>
+
+@if (resposta != null)
+{
+    <div class="alert alert-success">
+        <strong>Envio aceito pela AGCO.</strong>
+        <div>Protocolo: <code>@resposta.Protocol</code></div>
+        <div>Período: @resposta.PeriodMonth/@resposta.PeriodYear — totalValue: @resposta.TotalValue.ToString("N2")</div>
+        @if (resposta.DealerBranchCodes?.Count > 0)
+        {
+            <div>Filiais aceitas: @string.Join(", ", resposta.DealerBranchCodes)</div>
+        }
+    </div>
+}
+
+@if (preview != null)
+{
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Resultado da validação</span>
+            @if (preview.Valido)
+            {
+                <span class="badge bg-success">Pronto para envio</span>
+            }
+            else
+            {
+                <span class="badge bg-danger">@preview.Erros.Count problema(s)</span>
+            }
+        </div>
+        <div class="card-body">
+            <div class="row text-center mb-3">
+                <div class="col">
+                    <div class="fs-4">@preview.TotalLinhasOrigem</div>
+                    <small class="text-muted">linhas na origem</small>
+                </div>
+                <div class="col">
+                    <div class="fs-4">@preview.TotalItens</div>
+                    <small class="text-muted">itens no payload</small>
+                </div>
+                <div class="col">
+                    <div class="fs-4">@preview.TotalFiliais</div>
+                    <small class="text-muted">filiais</small>
+                </div>
+                <div class="col">
+                    <div class="fs-4 @(preview.TotalValue == 0 ? "text-success" : "text-danger")">
+                        @preview.TotalValue.ToString("N2")
+                    </div>
+                    <small class="text-muted">totalValue (deve ser 0)</small>
+                </div>
+                <div class="col">
+                    <div class="fs-4">@((preview.TamanhoPayloadBytes / 1024d).ToString("N1")) KB</div>
+                    <small class="text-muted">payload (limite 4 MB)</small>
+                </div>
+            </div>
+
+            @if (preview.Erros.Count > 0)
+            {
+                <div class="alert alert-danger">
+                    <strong>Correções necessárias antes do envio:</strong>
+                    <ul class="mb-0">
+                        @foreach (var e in preview.Erros)
+                        {
+                            <li>@e</li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            @if (preview.Avisos.Count > 0)
+            {
+                <div class="alert alert-warning">
+                    <ul class="mb-0">
+                        @foreach (var a in preview.Avisos)
+                        {
+                            <li>@a</li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            @if (preview.ContasSemDePara.Count > 0)
+            {
+                <p class="mb-1"><strong>Contas sem De/Para</strong> — cadastre em <a href="depara">De/Para</a>:</p>
+                <ul class="small">
+                    @foreach (var c in preview.ContasSemDePara)
+                    {
+                        <li>@c</li>
+                    }
+                </ul>
+            }
+
+            @if (preview.DepartamentosSemDePara.Count > 0)
+            {
+                <p class="mb-1"><strong>Centros de custo sem De/Para</strong>:</p>
+                <ul class="small">
+                    @foreach (var d in preview.DepartamentosSemDePara)
+                    {
+                        <li>@d</li>
+                    }
+                </ul>
+            }
+
+            @if (preview.Itens.Count > 0)
+            {
+                <button class="btn btn-sm btn-link px-0" @onclick="() => mostrarItens = !mostrarItens">
+                    @(mostrarItens ? "Ocultar" : "Ver") payload gerado (@preview.Itens.Count itens)
+                </button>
+
+                @if (mostrarItens)
+                {
+                    <table class="table table-sm table-striped mt-2">
+                        <thead>
+                            <tr>
+                                <th>codeDFSPlan</th>
+                                <th>dealerBranchCode</th>
+                                <th>sectionCode</th>
+                                <th>período</th>
+                                <th class="text-end">balanceValue</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var i in preview.Itens.Take(200))
+                            {
+                                <tr>
+                                    <td>@i.DfsPk.CodeDFSPlan</td>
+                                    <td>@i.DfsPk.DealerBranchCode</td>
+                                    <td>@i.DfsPk.SectionCode</td>
+                                    <td>@i.DfsPk.PeriodMonth/@i.DfsPk.PeriodYear</td>
+                                    <td class="text-end">@i.BalanceValue.ToString("N2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (preview.Itens.Count > 200)
+                    {
+                        <small class="text-muted">Exibindo os primeiros 200 de @preview.Itens.Count itens.</small>
+                    }
+                }
+            }
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>Exemplo de duas linhas no placeholder do textarea.</summary>
+    private const string PlaceholderExemplo =
+        "12.345.678/0001-90;1.1.01.001;ADM;1500,00\n12.345.678/0001-90;2.1.01.001;ADM;-1500,00";
+
+    private List<DealerDto> empresas = new();
+    private int empresaId;
+    private string periodMonth = DateTime.Today.AddMonths(-1).ToString("MM");
+    private string periodYear = DateTime.Today.AddMonths(-1).Year.ToString();
+    private string conteudo = string.Empty;
+    private BalancetePreview? preview;
+    private DInResponseDto? resposta;
+    private string? erro;
+    private string? aviso;
+    private bool processando;
+    private bool mostrarItens;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            empresas = await Api.GetEmpresasAsync();
+            var ativa = empresas.FirstOrDefault(e => e.IsActive);
+            if (ativa != null)
+                empresaId = ativa.Id;
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+    }
+
+    private async Task CarregarArquivo(InputFileChangeEventArgs e)
+    {
+        erro = null;
+
+        try
+        {
+            // 8 MB de folga na leitura; o limite de 4 MB é do payload gerado.
+            using var stream = e.File.OpenReadStream(8 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            conteudo = await reader.ReadToEndAsync();
+            aviso = $"Arquivo '{e.File.Name}' carregado.";
+        }
+        catch (Exception ex)
+        {
+            erro = $"Não foi possível ler o arquivo: {ex.Message}";
+        }
+    }
+
+    private BalanceteRequest? MontarRequest()
+    {
+        if (empresaId <= 0)
+        {
+            erro = "Selecione a empresa.";
+            return null;
+        }
+
+        var linhas = ParsearLinhas(conteudo, out var problemas);
+
+        if (problemas.Count > 0)
+        {
+            erro = "Linhas que não pude interpretar: " + string.Join("; ", problemas.Take(10)) +
+                   (problemas.Count > 10 ? $" e outras {problemas.Count - 10}." : ".");
+            return null;
+        }
+
+        if (linhas.Count == 0)
+        {
+            erro = "Informe as linhas do balancete.";
+            return null;
+        }
+
+        return new BalanceteRequest
+        {
+            DealerId = empresaId,
+            PeriodMonth = periodMonth,
+            PeriodYear = periodYear,
+            Linhas = linhas
+        };
+    }
+
+    private async Task Validar()
+    {
+        preview = null;
+        resposta = null;
+        erro = null;
+        aviso = null;
+
+        var request = MontarRequest();
+        if (request == null)
+            return;
+
+        processando = true;
+
+        try
+        {
+            preview = await Api.ValidarBalanceteAsync(request);
+            aviso = preview.Valido
+                ? "Balancete validado: pronto para envio."
+                : null;
+        }
+        catch (ApiException ex)
+        {
+            erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            erro = $"Falha ao validar: {ex.Message}";
+        }
+        finally
+        {
+            processando = false;
+        }
+    }
+
+    private async Task Enviar()
+    {
+        erro = null;
+        aviso = null;
+        resposta = null;
+
+        var request = MontarRequest();
+        if (request == null)
+            return;
+
+        processando = true;
+
+        try
+        {
+            var resultado = await Api.EnviarBalanceteAsync(request);
+            preview = resultado.Preview;
+
+            if (resultado.Enviado)
+            {
+                resposta = resultado.Resposta;
+                aviso = "Balancete enviado ao D-IN.";
+            }
+            else
+            {
+                erro = resultado.Erro ?? "O envio não foi concluído.";
+            }
+        }
+        catch (ApiException ex)
+        {
+            erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            erro = $"Falha ao enviar: {ex.Message}";
+        }
+        finally
+        {
+            processando = false;
+        }
+    }
+
+    /// <summary>
+    /// Lê o texto colado/arquivo no formato
+    /// CNPJ da filial; conta de origem; centro de custo; saldo.
+    /// Cabeçalho é ignorado e o saldo aceita vírgula ou ponto como decimal.
+    /// </summary>
+    private static List<BalanceteLinha> ParsearLinhas(string texto, out List<string> problemas)
+    {
+        var linhas = new List<BalanceteLinha>();
+        problemas = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(texto))
+            return linhas;
+
+        var numero = 0;
+
+        foreach (var bruta in texto.Split('\n'))
+        {
+            numero++;
+            var linha = bruta.Trim().TrimEnd('\r');
+
+            if (string.IsNullOrWhiteSpace(linha))
+                continue;
+
+            var partes = linha.Split(';', '\t');
+            if (partes.Length < 4)
+                partes = linha.Split(',');
+
+            if (partes.Length < 4)
+            {
+                problemas.Add($"linha {numero} (esperado 4 campos, veio {partes.Length})");
+                continue;
+            }
+
+            var saldoTexto = partes[3].Trim();
+
+            // Cabeçalho: a 4ª coluna não é número.
+            if (!TentarLerDecimal(saldoTexto, out var saldo))
+            {
+                if (numero == 1)
+                    continue;
+
+                problemas.Add($"linha {numero} (saldo '{saldoTexto}' inválido)");
+                continue;
+            }
+
+            linhas.Add(new BalanceteLinha
+            {
+                BranchCnpj = partes[0].Trim(),
+                SourceAccountCode = partes[1].Trim(),
+                SourceCostCenter = partes[2].Trim(),
+                BalanceValue = saldo,
+                Numero = numero
+            });
+        }
+
+        return linhas;
+    }
+
+    private static bool TentarLerDecimal(string valor, out decimal resultado)
+    {
+        resultado = 0;
+
+        if (string.IsNullOrWhiteSpace(valor))
+            return false;
+
+        var limpo = valor.Replace(" ", string.Empty);
+
+        // 1.234,56 -> 1234.56 ; 1234,56 -> 1234.56
+        if (limpo.Contains(',') && limpo.Contains('.'))
+            limpo = limpo.Replace(".", string.Empty);
+
+        limpo = limpo.Replace(',', '.');
+
+        return decimal.TryParse(limpo, System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out resultado);
+    }
+}

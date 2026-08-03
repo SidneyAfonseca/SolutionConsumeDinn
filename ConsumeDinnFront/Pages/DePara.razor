@@ -1,0 +1,366 @@
+@page "/depara"
+@attribute [Authorize(Roles = "Admin")]
+@inject DinnApiClient Api
+
+<PageTitle>De/Para</PageTitle>
+
+<h1>De/Para</h1>
+
+<p>
+    Relação entre o plano de contas da concessionária e o do D-IN. O guia exige que toda conta
+    com movimentação e saldo tenha De/Para — o envio de contas sem essa relação é bloqueado.
+</p>
+
+@if (!string.IsNullOrEmpty(erro))
+{
+    <div class="alert alert-danger" role="alert">@erro</div>
+}
+@if (!string.IsNullOrEmpty(aviso))
+{
+    <div class="alert alert-success" role="alert">@aviso</div>
+}
+
+<div class="mb-3">
+    <label class="form-label" for="empresa">Empresa</label>
+    <select id="empresa" class="form-select" style="max-width: 520px"
+            value="@empresaId" @onchange="TrocarEmpresa">
+        <option value="0">(selecione)</option>
+        @foreach (var e in empresas)
+        {
+            <option value="@e.Id">@e.CorporateName — @e.HeadOfficeCnpj</option>
+        }
+    </select>
+</div>
+
+@if (empresas.Count == 0)
+{
+    <div class="alert alert-warning">
+        Nenhuma empresa cadastrada. Cadastre a empresa em <a href="empresa">Empresa</a> antes de montar o De/Para.
+    </div>
+}
+else if (empresaId > 0)
+{
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <button class="nav-link @(abaContas ? "active" : "")" @onclick="() => abaContas = true">
+                Contas (@contas.Count)
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link @(!abaContas ? "active" : "")" @onclick="() => abaContas = false">
+                Centros de custo (@departamentosDePara.Count)
+            </button>
+        </li>
+    </ul>
+
+    @if (abaContas)
+    {
+        <div class="card mb-3">
+            <div class="card-header">Nova relação de conta</div>
+            <div class="card-body">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-2">
+                        <label class="form-label" for="contaOrigem">Conta na origem</label>
+                        <input id="contaOrigem" class="form-control" @bind="novaConta.SourceCode" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="contaDesc">Descrição na origem</label>
+                        <input id="contaDesc" class="form-control" @bind="novaConta.SourceDescription" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="contaDestino">Conta D-IN</label>
+                        <select id="contaDestino" class="form-select" @bind="novaConta.AccountPlanCode">
+                            <option value="">(selecione)</option>
+                            @foreach (var p in planoDeContas)
+                            {
+                                <option value="@p.Code">@p.Code — @p.Description</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary w-100" @onclick="SalvarConta" disabled="@salvando">Salvar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (contas.Count == 0)
+        {
+            <p>Nenhuma conta mapeada para esta empresa.</p>
+        }
+        else
+        {
+            <table class="table table-striped table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Conta origem</th>
+                        <th>Descrição origem</th>
+                        <th>Conta D-IN</th>
+                        <th>Descrição D-IN</th>
+                        <th>Situação</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in contas)
+                    {
+                        <tr>
+                            <td>@m.SourceCode</td>
+                            <td>@m.SourceDescription</td>
+                            <td>@m.AccountPlanCode</td>
+                            <td>@m.AccountPlanDescription</td>
+                            <td>
+                                @if (m.IsActive)
+                                {
+                                    <span class="badge bg-success">Ativa</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">Inativa</span>
+                                }
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => EditarConta(m)">Editar</button>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoverConta(m)" disabled="@salvando">Remover</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+    else
+    {
+        <div class="card mb-3">
+            <div class="card-header">Nova relação de centro de custo</div>
+            <div class="card-body">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-2">
+                        <label class="form-label" for="ccOrigem">Centro de custo</label>
+                        <input id="ccOrigem" class="form-control" @bind="novoDepartamento.SourceCode" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="ccDesc">Descrição na origem</label>
+                        <input id="ccDesc" class="form-control" @bind="novoDepartamento.SourceDescription" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="ccDestino">Departamento D-IN</label>
+                        <select id="ccDestino" class="form-select" @bind="novoDepartamento.DepartmentCode">
+                            <option value="">(selecione)</option>
+                            @foreach (var d in departamentos)
+                            {
+                                <option value="@d.Code">@d.Code — @d.Description</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary w-100" @onclick="SalvarDepartamento" disabled="@salvando">Salvar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @if (departamentosDePara.Count == 0)
+        {
+            <p>Nenhum centro de custo mapeado para esta empresa.</p>
+        }
+        else
+        {
+            <table class="table table-striped table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Centro de custo</th>
+                        <th>Descrição origem</th>
+                        <th>Departamento D-IN</th>
+                        <th>Descrição D-IN</th>
+                        <th>Situação</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in departamentosDePara)
+                    {
+                        <tr>
+                            <td>@m.SourceCode</td>
+                            <td>@m.SourceDescription</td>
+                            <td>@m.DepartmentCode</td>
+                            <td>@m.DepartmentDescription</td>
+                            <td>
+                                @if (m.IsActive)
+                                {
+                                    <span class="badge bg-success">Ativo</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">Inativo</span>
+                                }
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => EditarDepartamento(m)">Editar</button>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoverDepartamento(m)" disabled="@salvando">Remover</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+}
+
+@code {
+    private List<DealerDto> empresas = new();
+    private List<CodeDescriptionDto> planoDeContas = new();
+    private List<CodeDescriptionDto> departamentos = new();
+    private List<AccountMappingDto> contas = new();
+    private List<DepartmentMappingDto> departamentosDePara = new();
+    private SaveAccountMappingRequest novaConta = new();
+    private SaveDepartmentMappingRequest novoDepartamento = new();
+    private int empresaId;
+    private bool abaContas = true;
+    private string? erro;
+    private string? aviso;
+    private bool salvando;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            empresas = await Api.GetEmpresasAsync();
+            planoDeContas = await Api.GetPlanoDeContasAsync();
+            departamentos = await Api.GetDepartamentosAsync();
+
+            if (empresas.Count == 1)
+            {
+                empresaId = empresas[0].Id;
+                await CarregarDePara();
+            }
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+    }
+
+    private async Task TrocarEmpresa(ChangeEventArgs e)
+    {
+        empresaId = int.TryParse(e.Value?.ToString(), out var id) ? id : 0;
+        erro = null;
+        aviso = null;
+        await CarregarDePara();
+    }
+
+    private async Task CarregarDePara()
+    {
+        if (empresaId <= 0)
+        {
+            contas = new();
+            departamentosDePara = new();
+            return;
+        }
+
+        try
+        {
+            contas = await Api.GetDeParaContasAsync(empresaId);
+            departamentosDePara = await Api.GetDeParaDepartamentosAsync(empresaId);
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+    }
+
+    private void EditarConta(AccountMappingDto m)
+    {
+        novaConta = new SaveAccountMappingRequest
+        {
+            SourceCode = m.SourceCode,
+            SourceDescription = m.SourceDescription,
+            AccountPlanCode = m.AccountPlanCode,
+            IsActive = m.IsActive
+        };
+        abaContas = true;
+    }
+
+    private void EditarDepartamento(DepartmentMappingDto m)
+    {
+        novoDepartamento = new SaveDepartmentMappingRequest
+        {
+            SourceCode = m.SourceCode,
+            SourceDescription = m.SourceDescription,
+            DepartmentCode = m.DepartmentCode,
+            IsActive = m.IsActive
+        };
+        abaContas = false;
+    }
+
+    private async Task SalvarConta()
+    {
+        if (string.IsNullOrWhiteSpace(novaConta.SourceCode) || string.IsNullOrWhiteSpace(novaConta.AccountPlanCode))
+        {
+            erro = "Informe a conta de origem e a conta D-IN de destino.";
+            return;
+        }
+
+        await Executar(async () =>
+        {
+            await Api.SalvarDeParaContaAsync(empresaId, novaConta);
+            aviso = $"De/Para da conta {novaConta.SourceCode} salvo.";
+            novaConta = new SaveAccountMappingRequest();
+        });
+    }
+
+    private async Task SalvarDepartamento()
+    {
+        if (string.IsNullOrWhiteSpace(novoDepartamento.SourceCode) || string.IsNullOrWhiteSpace(novoDepartamento.DepartmentCode))
+        {
+            erro = "Informe o centro de custo de origem e o departamento D-IN de destino.";
+            return;
+        }
+
+        await Executar(async () =>
+        {
+            await Api.SalvarDeParaDepartamentoAsync(empresaId, novoDepartamento);
+            aviso = $"De/Para do centro de custo {novoDepartamento.SourceCode} salvo.";
+            novoDepartamento = new SaveDepartmentMappingRequest();
+        });
+    }
+
+    private async Task RemoverConta(AccountMappingDto m) =>
+        await Executar(async () =>
+        {
+            await Api.RemoverDeParaContaAsync(m.Id);
+            aviso = $"De/Para da conta {m.SourceCode} removido.";
+        });
+
+    private async Task RemoverDepartamento(DepartmentMappingDto m) =>
+        await Executar(async () =>
+        {
+            await Api.RemoverDeParaDepartamentoAsync(m.Id);
+            aviso = $"De/Para do centro de custo {m.SourceCode} removido.";
+        });
+
+    private async Task Executar(Func<Task> acao)
+    {
+        salvando = true;
+        erro = null;
+        aviso = null;
+
+        try
+        {
+            await acao();
+        }
+        catch (ApiException ex)
+        {
+            erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            erro = $"Falha ao chamar a API: {ex.Message}";
+        }
+        finally
+        {
+            salvando = false;
+            await CarregarDePara();
+        }
+    }
+}
