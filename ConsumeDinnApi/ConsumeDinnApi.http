@@ -1,6 +1,11 @@
 @ConsumeDinnApi_HostAddress = http://localhost:5018
 
-GET {{ConsumeDinnApi_HostAddress}}/weatherforecast/
+GET {{ConsumeDinnApi_HostAddress}}/api/config/departments
+Accept: application/json
+
+###
+
+GET {{ConsumeDinnApi_HostAddress}}/api/config/accountplans
 Accept: application/json
 
 ###
