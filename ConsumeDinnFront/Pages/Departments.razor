@@ -1,4 +1,5 @@
 @page "/departments"
+@attribute [Authorize]
 @inject HttpClient Http
 
 <PageTitle>Departamentos</PageTitle>
@@ -17,8 +18,8 @@ else
         <thead>
             <tr>
                 <th>Id</th>
-                <th>Código (Code)</th>
-                <th>Descrição</th>
+                <th>CÃ³digo (Code)</th>
+                <th>DescriÃ§Ã£o</th>
             </tr>
         </thead>
         <tbody>

@@ -14,9 +14,44 @@ public class AppDbContext : DbContext
     public DbSet<Department> Departments { get; set; }
     public DbSet<AccountPlan> AccountPlans { get; set; }
 
+    /// <summary>
+    /// Hash PBKDF2 da senha inicial do administrador ("admin123"). Salt fixo
+    /// para que o seed da migração seja determinístico — a senha deve ser
+    /// trocada no primeiro acesso.
+    /// </summary>
+    private const string AdminSeedPasswordHash =
+        "pbkdf2.sha256.100000.REluU2VlZFNhbHQyMDI2IQ==.UMSU6QvT7iFi+az8X8F20sfnepz17NyQvQzWA6ry9G0=";
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<UserLogin>(entity =>
+        {
+            entity.HasIndex(u => u.Username).IsUnique();
+            entity.Property(u => u.Role).HasConversion<int>();
+        });
+
+        // O envio guarda o usuário que o disparou; ao remover um usuário o
+        // histórico é preservado (UserId fica nulo, Username permanece).
+        modelBuilder.Entity<DInReturn>()
+            .HasOne(r => r.User)
+            .WithMany()
+            .HasForeignKey(r => r.UserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // Administrador inicial
+        modelBuilder.Entity<UserLogin>().HasData(
+            new UserLogin
+            {
+                Id = 1,
+                Username = "admin",
+                PasswordHash = AdminSeedPasswordHash,
+                Role = UserRole.Admin,
+                IsActive = true,
+                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            }
+        );
 
         // Seed de Departamentos (item 7 do Guia de implementação da API D-IN v4.1)
         modelBuilder.Entity<Department>().HasData(

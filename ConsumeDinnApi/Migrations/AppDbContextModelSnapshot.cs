@@ -1773,7 +1773,16 @@ namespace ConsumeDinnApi.Migrations
                     b.Property<bool>("Success")
                         .HasColumnType("tinyint(1)");
 
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Username")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("DInReturns");
                 });
@@ -1847,9 +1856,18 @@ namespace ConsumeDinnApi.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("longtext");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
 
                     b.Property<string>("Username")
                         .IsRequired()
@@ -1858,7 +1876,31 @@ namespace ConsumeDinnApi.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Username")
+                        .IsUnique();
+
                     b.ToTable("Users");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            PasswordHash = "pbkdf2.sha256.100000.REluU2VlZFNhbHQyMDI2IQ==.UMSU6QvT7iFi+az8X8F20sfnepz17NyQvQzWA6ry9G0=",
+                            Role = 1,
+                            Username = "admin"
+                        });
+                });
+
+            modelBuilder.Entity("DIn.Domain.DInReturn", b =>
+                {
+                    b.HasOne("DIn.Domain.UserLogin", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("User");
                 });
 #pragma warning restore 612, 618
         }

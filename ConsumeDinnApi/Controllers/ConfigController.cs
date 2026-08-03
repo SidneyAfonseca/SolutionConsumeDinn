@@ -1,5 +1,6 @@
 using DIn.Domain;
 using DIn.Repository;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,6 +8,7 @@ namespace ConsumeDinnApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class ConfigController : ControllerBase
 {
     private readonly AppDbContext _context;

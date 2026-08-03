@@ -1,0 +1,102 @@
+@page "/envios"
+@attribute [Authorize]
+@inject DinnApiClient Api
+
+<PageTitle>Envios D-IN</PageTitle>
+
+<h1>Envios ao D-IN</h1>
+
+<AuthorizeView Roles="Admin">
+    <Authorized>
+        <p>Histórico de todos os envios, com o usuário responsável por cada um.</p>
+    </Authorized>
+    <NotAuthorized>
+        <p>Histórico dos seus envios.</p>
+    </NotAuthorized>
+</AuthorizeView>
+
+@if (!string.IsNullOrEmpty(erro))
+{
+    <div class="alert alert-danger" role="alert">@erro</div>
+}
+
+@if (envios == null)
+{
+    <p><em>Carregando...</em></p>
+}
+else if (envios.Count == 0)
+{
+    <p>Nenhum envio registrado.</p>
+}
+else
+{
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th>Id</th>
+                <th>Data/Hora</th>
+                <th>Usuário</th>
+                <th>Resultado</th>
+                <th>Retorno da API</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var envio in envios)
+            {
+                <tr>
+                    <td>@envio.Id</td>
+                    <td>@envio.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</td>
+                    <td>@(string.IsNullOrWhiteSpace(envio.Username) ? "-" : envio.Username)</td>
+                    <td>
+                        @if (envio.Success)
+                        {
+                            <span class="badge bg-success">Sucesso</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-danger">Falha</span>
+                        }
+                    </td>
+                    <td class="text-truncate" style="max-width: 380px">@envio.Response</td>
+                    <td>
+                        <button class="btn btn-sm btn-link" @onclick="() => Alternar(envio.Id)">
+                            @(expandido == envio.Id ? "Ocultar" : "Payload")
+                        </button>
+                    </td>
+                </tr>
+                @if (expandido == envio.Id)
+                {
+                    <tr>
+                        <td colspan="6">
+                            <strong>Retorno completo</strong>
+                            <pre class="bg-light p-2 small">@envio.Response</pre>
+                            <strong>Payload enviado</strong>
+                            <pre class="bg-light p-2 small">@envio.Payload</pre>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<DInReturnDto>? envios;
+    private string? erro;
+    private int? expandido;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            envios = await Api.GetEnviosAsync();
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+    }
+
+    private void Alternar(int id) => expandido = expandido == id ? null : id;
+}

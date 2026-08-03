@@ -14,16 +14,34 @@
                 <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
             </NavLink>
         </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="departments">
-                <span class="bi bi-diagram-3-fill-nav-menu" aria-hidden="true"></span> Departamentos
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="accountplans">
-                <span class="bi bi-wallet2-nav-menu" aria-hidden="true"></span> Plano de Contas
-            </NavLink>
-        </div>
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="departments">
+                        <span class="bi bi-diagram-3-fill-nav-menu" aria-hidden="true"></span> Departamentos
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="accountplans">
+                        <span class="bi bi-wallet2-nav-menu" aria-hidden="true"></span> Plano de Contas
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="envios">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Envios D-IN
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+        <AuthorizeView Roles="Admin">
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="users">
+                        <span class="bi bi-people-fill-nav-menu" aria-hidden="true"></span> Usuários
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
     </nav>
 </div>
 

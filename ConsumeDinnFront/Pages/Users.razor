@@ -1,0 +1,282 @@
+@page "/users"
+@attribute [Authorize(Roles = "Admin")]
+@inject DinnApiClient Api
+
+<PageTitle>Usuários</PageTitle>
+
+<h1>Administração de Usuários</h1>
+
+<p>Somente administradores acessam esta tela. Um administrador não pode desabilitar o próprio usuário.</p>
+
+@if (!string.IsNullOrEmpty(erro))
+{
+    <div class="alert alert-danger" role="alert">@erro</div>
+}
+@if (!string.IsNullOrEmpty(aviso))
+{
+    <div class="alert alert-success" role="alert">@aviso</div>
+}
+
+<div class="card mb-4">
+    <div class="card-header">Novo usuário</div>
+    <div class="card-body">
+        <EditForm Model="@novo" OnValidSubmit="CriarUsuario">
+            <DataAnnotationsValidator />
+            <div class="row g-2 align-items-end">
+                @* autocomplete desligado para o Chrome não preencher com as credenciais do admin logado *@
+                <div class="col-md-4">
+                    <label class="form-label" for="novoUsuario">Usuário</label>
+                    <InputText id="novoUsuario" class="form-control" @bind-Value="novo.Username" autocomplete="off" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="novaSenha">Senha</label>
+                    <InputText id="novaSenha" type="password" class="form-control" @bind-Value="novo.Password" autocomplete="new-password" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="novoPerfil">Perfil</label>
+                    <InputSelect id="novoPerfil" class="form-select" @bind-Value="novo.Role">
+                        <option value="@UserRole.UserNormal">UserNormal</option>
+                        <option value="@UserRole.Admin">Admin</option>
+                    </InputSelect>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100" type="submit" disabled="@salvando">Criar</button>
+                </div>
+            </div>
+            <ValidationSummary class="mt-2" />
+        </EditForm>
+    </div>
+</div>
+
+@if (usuarios == null)
+{
+    <p><em>Carregando...</em></p>
+}
+else
+{
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th>Usuário</th>
+                <th>Perfil</th>
+                <th>Situação</th>
+                <th class="text-end">Envios D-IN</th>
+                <th>Último envio</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var u in usuarios)
+            {
+                var ehEuMesmo = u.Username == usuarioLogado;
+                <tr>
+                    <td>
+                        @u.Username
+                        @if (ehEuMesmo)
+                        {
+                            <span class="badge bg-secondary ms-1">você</span>
+                        }
+                    </td>
+                    <td>
+                        <select class="form-select form-select-sm" style="width:auto"
+                                value="@u.Role"
+                                @onchange="e => AlterarPerfil(u, e.Value?.ToString())"
+                                disabled="@salvando">
+                            <option value="@UserRole.UserNormal">UserNormal</option>
+                            <option value="@UserRole.Admin">Admin</option>
+                        </select>
+                    </td>
+                    <td>
+                        @if (u.IsActive)
+                        {
+                            <span class="badge bg-success">Ativo</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-danger">Desabilitado</span>
+                        }
+                    </td>
+                    <td class="text-end">@u.TotalEnvios</td>
+                    <td>@(u.UltimoEnvio?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</td>
+                    <td>
+                        @if (u.IsActive)
+                        {
+                            <button class="btn btn-sm btn-outline-danger me-1"
+                                    @onclick="() => AlterarStatus(u, false)"
+                                    disabled="@(salvando || ehEuMesmo)"
+                                    title="@(ehEuMesmo ? "Você não pode desabilitar o seu próprio usuário" : "Desabilitar acesso")">
+                                Desabilitar
+                            </button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-sm btn-outline-success me-1"
+                                    @onclick="() => AlterarStatus(u, true)"
+                                    disabled="@salvando">
+                                Habilitar
+                            </button>
+                        }
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => AbrirResetSenha(u)" disabled="@salvando">
+                            Redefinir senha
+                        </button>
+                    </td>
+                </tr>
+                @if (resetUsuario?.Id == u.Id)
+                {
+                    <tr>
+                        <td colspan="6">
+                            <div class="d-flex align-items-end gap-2">
+                                <div>
+                                    <label class="form-label" for="senhaReset">Nova senha para @u.Username</label>
+                                    <input id="senhaReset" type="password" class="form-control form-control-sm" autocomplete="new-password" @bind="novaSenha" />
+                                </div>
+                                <button class="btn btn-sm btn-primary" @onclick="() => RedefinirSenha(u)" disabled="@salvando">Salvar</button>
+                                <button class="btn btn-sm btn-link" @onclick="() => resetUsuario = null">Cancelar</button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<UserDto>? usuarios;
+    private readonly CreateUserModel novo = new();
+    private UserDto? resetUsuario;
+    private string novaSenha = string.Empty;
+    private string? erro;
+    private string? aviso;
+    private bool salvando;
+    private string? usuarioLogado;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState != null)
+        {
+            var state = await AuthState;
+            usuarioLogado = state.User.Identity?.Name;
+        }
+
+        await CarregarUsuarios();
+    }
+
+    private async Task CarregarUsuarios()
+    {
+        try
+        {
+            usuarios = await Api.GetUsuariosAsync();
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+    }
+
+    private async Task CriarUsuario()
+    {
+        await Executar(async () =>
+        {
+            await Api.CriarUsuarioAsync(new CreateUserRequest
+            {
+                Username = novo.Username,
+                Password = novo.Password,
+                Role = novo.Role
+            });
+
+            aviso = $"Usuário '{novo.Username}' criado.";
+            novo.Username = string.Empty;
+            novo.Password = string.Empty;
+            novo.Role = UserRole.UserNormal;
+        });
+    }
+
+    private async Task AlterarStatus(UserDto user, bool ativo)
+    {
+        await Executar(async () =>
+        {
+            await Api.AlterarStatusAsync(user.Id, ativo);
+            aviso = ativo ? $"Usuário '{user.Username}' habilitado." : $"Usuário '{user.Username}' desabilitado.";
+        });
+    }
+
+    private async Task AlterarPerfil(UserDto user, string? valor)
+    {
+        if (!Enum.TryParse<UserRole>(valor, out var role) || role == user.Role)
+            return;
+
+        await Executar(async () =>
+        {
+            await Api.AlterarPerfilAsync(user.Id, role);
+            aviso = $"Perfil de '{user.Username}' alterado para {role}.";
+        });
+    }
+
+    private void AbrirResetSenha(UserDto user)
+    {
+        resetUsuario = user;
+        novaSenha = string.Empty;
+        erro = null;
+        aviso = null;
+    }
+
+    private async Task RedefinirSenha(UserDto user)
+    {
+        if (novaSenha.Length < 6)
+        {
+            erro = "A senha deve ter no mínimo 6 caracteres.";
+            return;
+        }
+
+        await Executar(async () =>
+        {
+            await Api.RedefinirSenhaAsync(user.Id, novaSenha);
+            aviso = $"Senha de '{user.Username}' redefinida.";
+            resetUsuario = null;
+            novaSenha = string.Empty;
+        });
+    }
+
+    /// <summary>
+    /// Executa a ação, traduz o erro da API e recarrega a lista para que a
+    /// tela reflita exatamente o que o backend aceitou.
+    /// </summary>
+    private async Task Executar(Func<Task> acao)
+    {
+        salvando = true;
+        erro = null;
+        aviso = null;
+
+        try
+        {
+            await acao();
+        }
+        catch (ApiException ex)
+        {
+            erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            erro = $"Falha ao chamar a API: {ex.Message}";
+        }
+        finally
+        {
+            salvando = false;
+            await CarregarUsuarios();
+        }
+    }
+
+    private class CreateUserModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Informe o usuário")]
+        public string Username { get; set; } = string.Empty;
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Informe a senha")]
+        [System.ComponentModel.DataAnnotations.MinLength(6, ErrorMessage = "A senha deve ter no mínimo 6 caracteres")]
+        public string Password { get; set; } = string.Empty;
+        public UserRole Role { get; set; } = UserRole.UserNormal;
+    }
+}

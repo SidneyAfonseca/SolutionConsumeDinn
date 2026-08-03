@@ -1,0 +1,76 @@
+@page "/login"
+@layout MainLayout
+@inject DinnApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>Entrar</PageTitle>
+
+<h1>Entrar</h1>
+
+<div class="row">
+    <div class="col-md-5">
+        <EditForm Model="@model" OnValidSubmit="Entrar">
+            <DataAnnotationsValidator />
+
+            <div class="mb-3">
+                <label class="form-label" for="usuario">Usuário</label>
+                <InputText id="usuario" class="form-control" @bind-Value="model.Username" autocomplete="username" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" for="senha">Senha</label>
+                <InputText id="senha" type="password" class="form-control" @bind-Value="model.Password" autocomplete="current-password" />
+            </div>
+
+            @if (!string.IsNullOrEmpty(erro))
+            {
+                <div class="alert alert-danger" role="alert">@erro</div>
+            }
+
+            <button class="btn btn-primary" type="submit" disabled="@enviando">
+                @(enviando ? "Entrando..." : "Entrar")
+            </button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    private string? ReturnUrl { get; set; }
+
+    private readonly LoginModel model = new();
+    private string? erro;
+    private bool enviando;
+
+    private async Task Entrar()
+    {
+        enviando = true;
+        erro = null;
+
+        try
+        {
+            await Api.LoginAsync(new LoginRequest { Username = model.Username, Password = model.Password });
+            Navigation.NavigateTo(string.IsNullOrWhiteSpace(ReturnUrl) ? "" : ReturnUrl);
+        }
+        catch (ApiException ex)
+        {
+            erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            erro = $"Não foi possível conectar à API: {ex.Message}";
+        }
+        finally
+        {
+            enviando = false;
+        }
+    }
+
+    private class LoginModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Informe o usuário")]
+        public string Username { get; set; } = string.Empty;
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Informe a senha")]
+        public string Password { get; set; } = string.Empty;
+    }
+}
