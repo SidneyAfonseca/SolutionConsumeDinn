@@ -1890,6 +1890,15 @@ namespace ConsumeDinnApi.Migrations
                             PasswordHash = "pbkdf2.sha256.100000.REluU2VlZFNhbHQyMDI2IQ==.UMSU6QvT7iFi+az8X8F20sfnepz17NyQvQzWA6ry9G0=",
                             Role = 1,
                             Username = "admin"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            PasswordHash = "pbkdf2.sha256.100000.REluU2VlZFVzZXIyMDI2IQ==.xT6z9JCMstAg/lUOCv2rI/50mHcW6Z+u8WgAbNi3Qmk=",
+                            Role = 2,
+                            Username = "usuario"
                         });
                 });
 

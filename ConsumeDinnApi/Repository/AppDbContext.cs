@@ -22,6 +22,13 @@ public class AppDbContext : DbContext
     private const string AdminSeedPasswordHash =
         "pbkdf2.sha256.100000.REluU2VlZFNhbHQyMDI2IQ==.UMSU6QvT7iFi+az8X8F20sfnepz17NyQvQzWA6ry9G0=";
 
+    /// <summary>
+    /// Hash PBKDF2 da senha inicial do usuário comum ("usuario123"). Mesma
+    /// observação do hash do admin: trocar no primeiro acesso.
+    /// </summary>
+    private const string UserNormalSeedPasswordHash =
+        "pbkdf2.sha256.100000.REluU2VlZFVzZXIyMDI2IQ==.xT6z9JCMstAg/lUOCv2rI/50mHcW6Z+u8WgAbNi3Qmk=";
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -40,7 +47,7 @@ public class AppDbContext : DbContext
             .HasForeignKey(r => r.UserId)
             .OnDelete(DeleteBehavior.SetNull);
 
-        // Administrador inicial
+        // Usuários iniciais: um de cada perfil
         modelBuilder.Entity<UserLogin>().HasData(
             new UserLogin
             {
@@ -48,6 +55,15 @@ public class AppDbContext : DbContext
                 Username = "admin",
                 PasswordHash = AdminSeedPasswordHash,
                 Role = UserRole.Admin,
+                IsActive = true,
+                CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            },
+            new UserLogin
+            {
+                Id = 2,
+                Username = "usuario",
+                PasswordHash = UserNormalSeedPasswordHash,
+                Role = UserRole.UserNormal,
                 IsActive = true,
                 CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             }
